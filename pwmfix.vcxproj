@@ -78,6 +78,7 @@
     <None Include="pwmfix.ino">
       <FileType>CppCode</FileType>
     </None>
+    <None Include="readme.markdown" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="__vm\.pwmfix.vsarduino.h" />
