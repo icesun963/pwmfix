@@ -1,234 +1,91 @@
-#define encoder0PinA 2  //A输入
-#define encoder0PinB 8  //B输入
 
 
-#define PinPWMStep 3//PWM 输入
-#define PinPWMDir  7//Dir 输入
+#include "pwmClass.h"
 
-#define PinPwmOutStep 10 //pwm输出
-#define PinPwmOutDir 9 //dir输出
+//通道数量
+int defineCount = 1;
 
-#define encodeStep 400 //编码器一圈步数 0.9度 
-#define pwmStep 200 //pwm 一圈步数 1.8度 
-#define pwmNs 1 //pwm细分 数
+pwmClass pwmDefines[] = { pwmClass(),pwmClass() };
 
+//输入控制
+int InterruptDefines[] = { 0,1,2,3 };
 
-//输入的步数 = 360/16/20
-//联轴器连接
-//如果采用同步带连接，需要计算当前同步齿轮大小 齿轮大小如果一致可不管
-//不一致需要计算各自的齿轮比
-#define linkValue 1.0
+int pinDefines[] = {
+	2,8, //encoder0PinA //encoder0PinB
+	3,7, //pwmIn  //pwmDir
+	9,10, //pwmOut //pwmOutDir
 
 
+};
 
-
-//最大输出速度，过大的输出，会导致失步，所以保持一个最高速度
-//默认响应速度肯定比原始速度快
-//当失步时，累计步数将被叠加
-#define maxOutSpeed = 10000
-
-volatile  int encoder0Pos = 0;
-
-unsigned long time = 0;
-
-long targetPos = 0; //目标位置
-long num = 0;
-
-//每8个脉冲=1个解码器信号
-//当前pwm信号和解码器信号的比率
-long pwmStepUnit = pwmStep * pwmNs / encodeStep / 2 * linkValue;
-
-long lastnum = 0;
-unsigned long lastms = 0; //长时间没动则清0
 //初始化
 void setup()
 {
-  Serial.begin(115200); //窗口初始化
 
-  pinMode(encoder0PinA, INPUT); //D2脚为输入
-  pinMode(encoder0PinB, INPUT); //D3脚为输入
-  digitalWrite(encoder0PinA, HIGH); // turn on pullup resistor
-  digitalWrite(encoder0PinB, HIGH); // turn on pullup resistor
-  pinMode(PinPWMStep, INPUT); //D2脚为输入
-  pinMode(PinPWMDir, INPUT); //D3脚为输入
-  digitalWrite(PinPWMStep, HIGH); // turn on pullup resistor
-  digitalWrite(PinPWMDir, HIGH); // turn on pullup resistor
+	Serial.begin(115200);
+	Serial.println("start"); // a personal quirk
+	printPos();
 
-  pinMode(PinPwmOutStep, OUTPUT); //D2脚为输入
-  pinMode(PinPwmOutDir, OUTPUT); //D3脚为输入
-  
-  //有高低，所以 一步=2 一圈总步数= 单圈步数*2
-  attachInterrupt(0, encode, CHANGE);  //注册中断0   //D2 解码器输入
-  //attachInterrupt(1, pwmInput, CHANGE); //注册中断1 	//D3 PWM输入
-  time = micros(); //时间初值
-  lastms = micros();
-  Serial.begin (115200);
-  Serial.println("start"); // a personal quirk
+	for (size_t i = 0; i < defineCount; i++)
+	{
+		pwmClass pwmdefine = pwmDefines[i];
+		int x = i * 6;
+		pwmdefine.encoder0PinA = pinDefines[x];
+		pwmdefine.encoder0PinB = pinDefines[x + 1];
+		pwmdefine.PinPWMStep = pinDefines[x + 2];
+		pwmdefine.PinPWMDir = pinDefines[x + 3];
+		pwmdefine.PinPwmOutStep = pinDefines[x + 4];
+		pwmdefine.PinPwmOutDir = pinDefines[x + 5];
+		pwmdefine.pwmnum = i + 1;
+	}
+
+	for (size_t i = 0; i < defineCount; i++)
+	{
+		pwmClass pwmdefine = pwmDefines[i];
+		pwmdefine.dosetup(InterruptDefines[i * 2], InterruptDefines[i * 2 + 1]);
+	}
+
+
+	interrupts();
 
 }
 
 
 void loop()
 {
-  //测试输出
-  while (num != encoder0Pos)
-  {
-    num = encoder0Pos;
-    Serial.println(num);
-  }
+	for (size_t i = 0; i < defineCount; i++)
+	{
+		pwmDefines[i].doloop();
+	}
+	if (micros() % 100000 == 0) {
+		printPos();
 
-  process_line();
- 
- //长时间没动则清0
-  int mspass = (micros() - lastms)/ 1000000;
-  
-  if (mspass > 30) {
-    targetPos = 0;
-    encoder0Pos = 0;
-    lastms = micros();
-    Serial.println("clear");
-  }
-  else
-  {
-    int lastChangeMs = (micros() - lastms) / 1000;
-    //5毫秒，并没有变化
-    if (lastChangeMs > 1) {
-      int nowpos = targetPos / pwmStepUnit;
-      
-      int p = abs(nowpos - encoder0Pos);
-      //如果电机处于低速或者停止状态
-      //回抽，或者换层
-      if (p > 5) {
-        //尝试修复
-        if (nowpos < encoder0Pos) {
-          digitalWrite(PinPwmOutDir, LOW);
-
-          digitalWrite(PinPwmOutStep, HIGH);
-          delay(1);
-          digitalWrite(PinPwmOutStep, LOW);
-        }
-        else
-        {
-          digitalWrite(PinPwmOutDir, HIGH);
-
-          digitalWrite(PinPwmOutStep, HIGH);
-          delay(1);
-          digitalWrite(PinPwmOutStep, LOW);
-        }
-        
-        //printPos();
-      }
-    }
-
-  }
-  //
+	}
 
 }
 
 
 
-//中断0调用函数
-void encode()
-{
-  if (digitalRead(encoder0PinA) == digitalRead(encoder0PinB))
-  {
-    encoder0Pos++;
-  }
-  else
-  {
-    encoder0Pos--;
-  }
-  //time = micros();
-  //Serial.println(encoder0Pos);
-}
-
-//中断1函数，pwm输入
-void pwmInput() {
-
-  lastms = micros();
-
-  int dir = digitalRead(PinPWMDir);
-  //直接输出
-  if (digitalRead(PinPWMStep) == HIGH) {
-
-    if (dir == 0) {
-      targetPos++;
-    }
-    else {
-      targetPos--;
-    }
-
-    //默认直接输出
-
-    int nowpos = targetPos / pwmStepUnit;
-  
-    int p = abs(nowpos - encoder0Pos);
-
-    //当获得下一个信号，并且，解码器误差和当前误差过大
-    //超过5
-    if (p > 5 ) {
-      if (dir == 0) { //正走
-        if (nowpos > encoder0Pos) {
-          //当前过前
-          //则不走
-        }
-        else
-        {
-          //不够 继续走
-          digitalWrite(PinPwmOutStep, HIGH);
-        }
-      }
-      else {
-        if (encoder0Pos < nowpos) {
-          //往回走，现在位置已经小于 目标位置
-          //不走
-        }
-        else
-        {
-          //不够 继续走 反转
-          digitalWrite(PinPwmOutStep, HIGH);
-        }
-      }
-    }
-    else {
-      digitalWrite(PinPwmOutStep, HIGH);
-    }
-
-
-  }
-  else
-  {
-    //低信号不管他
-    digitalWrite(PinPwmOutStep, LOW);
-  }
-
-
-}
 
 void process_line() {
-  if(Serial.available()){
-    char cmd = Serial.read();
-    
-    switch (cmd) {
-      case '?':
-        printPos();
-        break;
-      case 'T':
-        targetPos = Serial.parseInt();
-        break;
-    }
-    while (Serial.read() != 10);
-  }
+	if (Serial.available()) {
+		char cmd = Serial.read();
+
+		switch (cmd) {
+		case '?':
+			printPos();
+			break;
+
+		}
+		while (Serial.read() != 10);
+	}
 }
 
 
 void printPos() {
-  Serial.print(F("Position="));
-  Serial.print(encoder0Pos);
-  Serial.print(F(" target1="));
-  Serial.print(targetPos);
-
-  Serial.println("");
+	for (size_t i = 0; i < defineCount; i++)
+	{
+		pwmDefines[i].printPwmPos();
+	}
 }
-
 
