@@ -4,50 +4,70 @@
 #define _PWMCLASS_h
 
 #if defined(ARDUINO) && ARDUINO >= 100
-	#include "arduino.h"
+#include "arduino.h"
 #else
-	#include "WProgram.h"
+#include "WProgram.h"
 #endif
-	
+
 class pwmClass {
 
-public:
-	unsigned  int encoder0PinA;  //A输入
-	unsigned  int encoder0PinB;  //B输入
+  public:
 
 
-	unsigned  int  PinPWMStep;//PWM 输入
-	unsigned  int PinPWMDir;//Dir 输入
 
-	unsigned  int PinPwmOutStep; //pwm输出
-	unsigned  int PinPwmOutDir; //dir输出
+    unsigned  int encoder0PinA = 2;  //A输入
+    unsigned  int encoder0PinB = 8;  //B输入
+    unsigned  int encoder0Dir = 0; 
 
-	unsigned  int encodeStep; //编码器一圈步数 0.9度 
-	unsigned  int pwmStep; //pwm 一圈步数 1.8度 
-	unsigned  int pwmNs; //pwm细分 数
-	unsigned int pwmnum;//通道编号
-	double linkValue;
+    unsigned  int  PinPWMStep = 3;//PWM 输入
+    unsigned  int PinPWMDir = 7;//Dir 输入
 
-	void dosetup(int Interrupt0, int Interrupt1);
+    unsigned  int PinPwmOutStep = 9; //pwm输出
+    unsigned  int PinPwmOutDir = 10; //dir输出
 
-	void doloop();
+    unsigned  int encodeStep = 400; //编码器一圈步数 0.9度
+    unsigned  int pwmStep = 400; //pwm 一圈步数 1.8度
+    unsigned  int pwmNs = 8; //pwm细分 数
 
-	void printPwmPos();
+    double linkValue = 1.4375;
 
-private:
-	volatile int encoder0Pos = 0;
+    volatile int encoder0Pos = 0;
 
-	unsigned long time = 0;
+    long targetPos = 0; //目标位置
+    long num = 0;
+    long num2 = 0;
+    //每8个脉冲=1个解码器信号
+    //当前pwm信号和解码器信号的比率
+    double pwmStepUnit = (((pwmStep * pwmNs) / encodeStep) / 2) * linkValue;
 
-	long targetPos = 0; //目标位置
-	long num = 0;
+    long lastnum = 0;
 
-	//每8个脉冲=1个解码器信号
-	//当前pwm信号和解码器信号的比率
-	long pwmStepUnit = pwmStep * pwmNs / encodeStep / 2 * linkValue;
+    unsigned long lastms = 0; //长时间没动则清0
+    unsigned long time = 0;
 
-	long lastnum = 0;
-	unsigned long lastms = 0; //长时间没动则清0
+    unsigned int pwmnum = 1;//当前pwm通道
+
+    unsigned int nowdir = 0;//当前方向
+
+    bool infix = false;//修复进程
+
+    int InterruptA = 0;
+    int InterruptB = 0;
+    
+
+    void dosetup();
+
+    void doloop();
+
+    void printPwmPos();
+
+    void encode();
+
+    void pwmInput();
+
+  private:
+
+
 
 };
 
